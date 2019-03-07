@@ -23,17 +23,19 @@ class FileQueue(object):
 
     When the size of queue is reach the 'buffer_size',then the queue
     will be pickled to a file under the 'buffer_dir'.
-    'buffer_dir' will be created if neccesary and if 'buffer_dir' is not 
+    'buffer_dir' will be created if neccesary and if 'buffer_dir' is not
     given,then the Temporary directory will be use.
     """
 
-    def __init__(self, buffer_dir=None, buffer_size=100000):
+    def __init__(self, buffer_dir=None, buffer_size=100000, save_data=False):
         if buffer_dir:
             self.__buffer_dir = buffer_dir
         else:
             self.__buffer_dir = os.path.join(
                 tempfile.gettempdir(), 'pyFileQueue')
         self.__buffer_size = buffer_size
+        # whether to save data when closing
+        self.__save_data = save_data
         # create buffer_dir if neccesary
         if not os.path.exists(self.__buffer_dir):
             os.makedirs(self.__buffer_dir)
@@ -75,9 +77,9 @@ class FileQueue(object):
     def get(self, block=True, timeout=0):
         """Remove and return an item from the queue.
 
-        If optional args 'block' is true,block if necessary until an item 
-        is available. If 'timeout' is greater than 0, it blocks at most 
-        'timeout' seconds and raises the Empty exception if no item was 
+        If optional args 'block' is true,block if necessary until an item
+        is available. If 'timeout' is greater than 0, it blocks at most
+        'timeout' seconds and raises the Empty exception if no item was
         available within that time.
         Otherwise ('block' is false), return an item if one is immediately
         available, else raise the Empty exception ('timeout' is ignored
@@ -123,6 +125,21 @@ class FileQueue(object):
         """Return the approximate size of the queue (not reliable!)."""
         return self.__size
 
+    @property
+    def buffer_dir(self):
+        """Return the buffer directory."""
+        return self.__buffer_dir
+
+    @property
+    def buffer_size(self):
+        """Return the buffer size."""
+        return self.__buffer_size
+
+    @property
+    def is_save_data(self):
+        """Return if save data."""
+        return self.__save_data
+
     def __save_to_file(self, queue, tail=True):
         """Pickled a queue to a file"""
         file_name = str(int(_time() * 1000))
@@ -141,7 +158,7 @@ class FileQueue(object):
         os.remove(file_path)
         return obj
 
-    def close(self, save_data=False):
+    def close(self):
         """Save data and remove useless file if naccesary.
 
         if 'save_data' is True,queue will be saved.Otherwise the 
@@ -156,7 +173,7 @@ class FileQueue(object):
                     os.remove(path)
             os.rmdir(dir_path)
 
-        if save_data:
+        if self.__save_data and self.__files is not None:
             if self.__queue_in:
                 self.__save_to_file(self.__queue_in)
             if self.__queue_out:
@@ -168,9 +185,15 @@ class FileQueue(object):
                 rmdir(self.__buffer_dir)
         else:
             rmdir(self.__buffer_dir)
+        self.__queue_in = None
+        self.__queue_out = None
+        self.__files = None
 
     def __len__(self):
         return self.__size
 
     def __repr__(self):
         return 'FileQueue(localtion:%s, size:%d)' % (self.__buffer_dir, self.__size)
+
+    def __del__(self):
+        self.close()
